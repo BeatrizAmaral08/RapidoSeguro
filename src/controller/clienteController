@@ -1,0 +1,120 @@
+const { clienteModel } = require("../models/clienteModel");
+
+const clienteController = {
+    criarCliente: async (req, res) => {
+        try {
+
+            const { nomeCliente, cpfCliente, telefone, email, endereco } = req.body;
+            if (nomeCliente == undefined || cpfCliente == undefined || telefone == undefined || email == undefined || endereco == undefined) {
+                return res.status(400).json({ erro: `campos obrigatorios não foram preenchidos` });
+            }
+
+            // certifica que o cliente foi cadastrado com sucesso, ou se teve erros
+            await clienteModel.inserirCliente(nomeCliente, cpfCliente, telefone, email, endereco);
+
+            res.status(201).json({ message: 'Usuário cadastrado com sucesso!' });
+
+        } catch (error) {
+
+            console.error('Error ao cadastrar usuário:', error);
+
+            res.status(500).json({ erro: 'Erro no servidor ao cadastar usuário!' });
+        }
+    },
+
+    listarClientes: async (req, res) => {
+        try {
+            const { idCliente } = req.query;
+
+            if (idCliente) {
+                if (clienteController.lenght != 36) { // lenght determina o tamanho dos dados
+                    return res.status(400).json({ erro: "id do cliente inválido" });
+
+                }
+
+                const cliente = await clienteModel.buscarUm(idCliente); //await pausa a execução de um método assíncrono para aguardar a conclusão de uma operação de longa duração
+
+                return res.status(200).json(cliente);
+            }
+
+            const clientes = await clienteModel.buscarTodos();
+
+            res.status(200).json(clientes);
+        } catch (error) {
+            console.log(`Erro ao listar clientes:`, error);
+            res.status(500).json({ message: `Erro ao buscar clientes` });
+        }
+    },
+
+    atualizarCliente: async (req, res) => {
+        try {
+            const { idCliente } = req.params;
+            const { cpfCliente, telefone, email, endereco } = req.body;
+    
+            // Verifica se o ID tem um numero de caracteres correto 36 caracteres
+            if (idCliente.length != 36) {
+                return res.status(400).json({ erro: "ID do cliente inválido" });
+            }
+    
+            // Busca o cliente existente
+            const cliente = await clienteModel.buscarUm(idCliente);
+    
+            if (!cliente || cliente.length !== 1) {
+                return res.status(404).json({ erro: "Cliente não encontrado!" });
+            }
+    
+            //pega os dados atuais do cliente
+            const clienteAtual = cliente[0];
+    
+            // se algum campo não for enviado no body, mantém o valor atual
+            const cpfClienteAtualizado = cpfCliente ?? clienteAtual.cpfCliente;
+            const telefoneAtualizado = telefone ?? clienteAtual.telefone;
+            const emailAtualizado = email ?? clienteAtual.email;
+            const enderecoAtualizado = endereco ?? clienteAtual.endereco;
+    
+            // atualiza os dados no banco
+            await clienteModel.atualizarCliente(
+                idCliente,
+                cpfClienteAtualizado,
+                telefoneAtualizado,
+                emailAtualizado,
+                enderecoAtualizado
+            );
+    
+            res.status(200).json({ mensagem: "O cliente foi atualizado com sucesso!" });
+    
+        } catch (error) {
+            console.error("Erro ao atualizar cliente:", error);
+            res.status(500).json({ erro: "Erro interno no servidor ao atualizar cliente" });
+        }
+    },
+
+    deletarCliente: async (req, res) => {
+        try {
+            const { idCliente } = req.params;
+    
+            // Verifica se o ID tem caracteres validos
+            if (idCliente.length != 36) {
+                return res.status(400).json({ erro: "ID do cliente inválido" });
+            }
+    
+            //verifica antes se o cliente existe
+            const cliente = await clienteModel.buscarUm(idCliente);
+    
+            if (!cliente || cliente.length !== 1) {
+                return res.status(404).json({ erro: "O cliente não foi encontrado!" });
+            }
+    
+            // Deleta o cliente
+            await clienteModel.deletarCliente(idCliente);
+    
+            res.status(200).json({ mensagem: "Cliente foi deletado com sucesso!" });
+    
+        } catch (error) {
+            console.error("Erro ao deletar cliente:", error);
+            res.status(500).json({ erro: "Erro interno no servidor ao deletar cliente" });
+        }
+    },
+
+}   
+module.exports = { clienteController };

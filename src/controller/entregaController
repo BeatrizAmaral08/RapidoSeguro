@@ -1,0 +1,218 @@
+const { entregaModel } = require("../models/entregaModel");
+
+const entregaController = {
+
+    criarEntrega: async (req, res) => {
+        try {
+            const { idPedido, valorDistancia, valorPeso, acrescimo, desconto, taxaExtra, statusEntrega } = req.body;
+    
+            // ve se todos os campos obrigatórios foram preenchidos
+            if (
+                idPedido == undefined ||
+                valorDistancia == undefined ||
+                valorPeso == undefined ||
+                acrescimo == undefined ||
+                desconto == undefined ||
+                taxaExtra == undefined ||
+                statusEntrega == undefined
+            ) {
+                return res.status(400).json({ Erro: "Campos obrigatórios não foram preenchidos!" });
+            }
+    
+            // verifica se o ID do pedido é válido
+            if (idPedido.length != 36) {
+                return res.status(400).json({ Erro: "Id do Pedido inválido!" });
+            }
+    
+            // Verifica antes se o pedido existe
+            const pedido = await pedidoModel.buscarUm(idPedido);
+            if (!pedido || pedido.length !== 1) {
+                return res.status(404).json({ Erro: "Pedido não foi encontrado!" });
+            }
+    
+            //diz qual é o status da entrega, se esta calculando, em transito, entregue ou se foi cancelado
+            const statusValidos = ["calculado", "em transito", "entregue", "cancelado"];
+            if (!statusValidos.includes(statusEntrega.toLowerCase())) {
+                return res.status(400).json({ Erro: "Status inválido! Escolha entre: calculado, em transito, entregue ou cancelado." });
+            }
+    
+            // Valida todos os valores numéricos
+            if (isNaN(valorDistancia) || valorDistancia < 0) {
+                return res.status(400).json({ Erro: "Valor da distância inválido" });
+            }
+            if (isNaN(valorPeso) || valorPeso < 0) {
+                return res.status(400).json({ Erro: "Valor do peso inválido" });
+            }
+            if (isNaN(acrescimo) || acrescimo < 0) {
+                return res.status(400).json({ Erro: "Acréscimo inválido" });
+            }
+            if (isNaN(desconto) || desconto < 0) {
+                return res.status(400).json({ Erro: "Desconto inválido" });
+            }
+            if (isNaN(taxaExtra) || taxaExtra < 0) {
+                return res.status(400).json({ Erro: "Taxa extra inválida" });
+            }
+    
+            //cálculo do valor final da entrega
+            const valorFinal = valorDistancia + valorPeso + acrescimo + taxaExtra - desconto;
+    
+            //insere a entrega no banco de dados
+            await entregaModel.inserirEntrega(
+                idPedido,
+                valorDistancia,
+                valorPeso,
+                acrescimo,
+                desconto,
+                taxaExtra,
+                valorFinal,
+                statusEntrega
+            );
+    
+            res.status(201).json({ mensagem: "Entrega cadastrada com sucesso!" });
+    
+        } catch (error) {
+            console.error("Erro ao cadastrar entrega:", error);
+            res.status(500).json({ Erro: "Erro interno no servidor ao cadastrar entrega!" });
+        }
+    },
+    
+    atualizarEntrega: async (req, res) => {
+        try {
+            const { idEntrega } = req.params;
+            const { idPedido, valorDistancia, valorPeso, acrescimo, desconto, taxaExtra, statusEntrega } = req.body;
+    
+            // Verifica se o ID da entrega é valido e tem até 36 caracteres
+            if (idEntrega.length != 36) {
+                return res.status(400).json({ erro: "ID da entrega inválido!" });
+            }
+    
+            //busca a entrega 
+            const entrega = await entregaModel.buscarUma(idEntrega);
+    
+            if (!entrega || entrega.length !== 1) {
+                return res.status(404).json({ erro: "Entrega não encontrada!" });
+            }
+    
+            const entregaAtual = entrega[0];
+    
+            // valida se o id do pedido existe caso seja informado 
+            if (idPedido) {
+                if (idPedido.length != 36) {
+                    return res.status(400).json({ erro: "ID do pedido inválido!" });
+                }
+    
+                const pedido = await pedidoModel.buscarUm(idPedido);
+                if (!pedido || pedido.length !== 1) {
+                    return res.status(404).json({ erro: "Pedido não encontrado!" });
+                }
+            }
+    
+            //deixa os valores atuais caso não sejam enviados no body
+            const idPedidoAtualizado = idPedido ?? entregaAtual.idPedido;
+            const valorDistanciaAtualizado = valorDistancia ?? entregaAtual.valorDistancia;
+            const valorPesoAtualizado = valorPeso ?? entregaAtual.valorPeso;
+            const acrescimoAtualizado = acrescimo ?? entregaAtual.acrescimo;
+            const descontoAtualizado = desconto ?? entregaAtual.desconto;
+            const taxaExtraAtualizado = taxaExtra ?? entregaAtual.taxaExtra;
+            const statusEntregaAtualizado = statusEntrega ?? entregaAtual.statusEntrega;
+    
+            //calcula o valor final de novo
+            const valorFinalAtualizado =
+                valorDistanciaAtualizado +
+                valorPesoAtualizado +
+                acrescimoAtualizado +
+                taxaExtraAtualizado -
+                descontoAtualizado;
+    
+            //atualiza o status da entrega no banco
+            await entregaModel.atualizarEntrega(
+                idEntrega,
+                idPedidoAtualizado,
+                valorDistanciaAtualizado,
+                valorPesoAtualizado,
+                acrescimoAtualizado,
+                descontoAtualizado,
+                taxaExtraAtualizado,
+                valorFinalAtualizado,
+                statusEntregaAtualizado
+            );
+    
+            res.status(200).json({ mensagem: "Entrega atualizada!" });
+    
+        } catch (error) {
+            console.error("Erro ao atualizar entrega:", error);
+            res.status(500).json({ erro: "Erro interno no servidor ao atualizar entrega" });
+        }
+    },
+    
+    listarEntregas: async (req, res) => {
+        try {
+            const { idEntrega } = req.query;
+    
+            //se o usuário pedir uma entrega específica
+            if (idEntrega) {
+                if (idEntrega.length != 36) {
+                    return res.status(400).json({ erro: "ID da entrega inválido!" });
+                }
+
+                //busca a entrega com base no ID que foi informado
+                const entrega = await entregaModel.buscarUma(idEntrega);
+    
+                if (!entrega || entrega.length === 0) { //verifica se a entrega existe ou se o resultado da busca veio vazio
+                    return res.status(404).json({ erro: "Entrega não encontrada!" });
+                }
+    
+                return res.status(200).json(entrega);
+            }
+    
+            // Se não for informado id da entrega lista todas elas
+            const entregas = await entregaModel.buscarTodas();
+    
+            // Caso queira deixar claro o status de cada entrega
+            const entregasComStatus = entregas.map((entrega) => ({
+            //foi usado o "map" para percorrer a lista de entregas e criar uma nova lista com as informações transformadas
+                idEntrega: entrega.idEntrega,
+                idPedido: entrega.idPedido,
+                valorDistancia: entrega.valorDistancia,
+                valorPeso: entrega.valorPeso,
+                acrescimo: entrega.acrescimo,
+                desconto: entrega.desconto,
+                taxaExtra: entrega.taxaExtra,
+                valorFinal: entrega.valorFinal,
+                statusEntrega: entrega.statusEntrega
+            }));
+    
+            res.status(200).json(entregasComStatus);
+        } catch (error) {
+            console.error("Erro ao listar as entregas:", error);
+            res.status(500).json({ erro: "Erro interno no servidor ao listar as entregas" });
+        }
+    },
+
+    deletarEntrega: async (req, res) => {
+         try {
+        const { idEntrega } = req.params;
+
+        //Verifica se o ID tem o tamanho correto de caracteres
+        if (idEntrega.length != 36) {
+            return res.status(400).json({ erro: "ID da entrega inválido" });
+        }
+
+        //verifica se a entrega existe no banco de dados antes de tentar deletar
+        const entrega = await entregaModel.buscarUma(idEntrega);
+
+        //caso a entrega não seja encontrada retorna erro 404
+        if (!entrega || entrega.length !== 1) {
+            return res.status(404).json({ erro: "Entrega não encontrada!" });
+        }
+
+        await entregaModel.deletarEntrega(idEntrega);
+        res.status(200).json({ mensagem: "Entrega deletada com sucesso!" });
+
+    } catch (error) {
+        console.error("Erro ao deletar entrega:", error);
+        res.status(500).json({ erro: "Erro interno no servidor ao deletar entrega" });
+    }
+},
+}
+module.exports = { entregaController };
