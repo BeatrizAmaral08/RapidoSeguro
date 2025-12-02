@@ -1,9 +1,9 @@
 //cria rotas para acesar o controlador
 const express = require("express");
 const router = express.Router();
-const {entregaController} = require("../controllers/entregaController");
+const { entregaController } = require("../controller/entregaController.js");
 
-/**
+/*
  * define as rotas relacionadas às entregas
  * 
  * @module entregaRoutes
@@ -16,10 +16,9 @@ const {entregaController} = require("../controllers/entregaController");
  * DELETE /entregas/:idEntrega   -  exclui uma entrega
  */
 
-
 router.get("/entregas", entregaController.listarEntregas);
 
-router.get("/entregas/:idEntrega", entregaController.buscarUmaEntrega);
+router.get("/entregas/:idEntrega", entregaController.buscarEntrega); 
 
 router.post("/entregas", entregaController.criarEntrega);
 

@@ -1,46 +1,44 @@
 const { sql, getConnection } = require("../config/RapidoSeguro");
 
 const pedidoModel = {
- /**
-     * busca todos os pedidos e seus respectivos itens no banco de dados 
-     * @async
-     * @function buscarTodos
-     * @returns {Promise<Array>} retorna uma lista com todos os pedidos e seus itens.
-     * @throws mostra no console e propaga o erro caso a busca falhe
-     */
+    /**
+        * busca todos os pedidos e seus respectivos itens no banco de dados 
+        * @async
+        * @function buscarTodos
+        * @returns {Promise<Array>} retorna uma lista com todos os pedidos e seus itens.
+        * @throws mostra no console e propaga o erro caso a busca falhe
+        */
 
-    inserirPedido: async (idPedido, idCliente, dataPedido, tipoEntrega, distanciaEntrega, pesoKg, valorKm, valorKg, valorTotal) => {
-        const pool = await getConnection();
-    
-        const transaction = new sql.Transaction(pool); // realiza uma transação no banco de dados
-        await transaction.begin(); // inicia a transação
-    
+    inserirPedido: async (
+        idCliente,
+        dataPedido,
+        tipoEntrega,
+        distanciaEntrega,
+        pesoKg,
+        valorKm,
+        valorKg,
+        valorTotal
+    ) => {
         try {
-            const querySQL = `
-                INSERT INTO Pedidos 
-                    (idPedido, idCliente, dataPedido, tipoEntrega, distanciaEntrega, pesoKg, valorKm, valorKg, valorTotal)
-                VALUES 
-                    (@idPedido, @idCliente, @dataPedido, @tipoEntrega, @distanciaEntrega, @pesoKg, @valorKm, @valorKg, @valorTotal)
-            `;
-    
-            await transaction.request()
-                .input("idPedido", sql.UniqueIdentifier, idPedido)
-                .input("idCliente", sql.UniqueIdentifier, idCliente)
-                .input("dataPedido", sql.Date, dataPedido)
-                .input("tipoEntrega", sql.VarChar(10), tipoEntrega)
-                .input("distanciaEntrega", sql.Decimal(10, 2), distanciaEntrega)
-                .input("pesoKg", sql.Decimal(10, 2), pesoKg)
-                .input("valorKm", sql.Decimal(10, 2), valorKm)
-                .input("valorKg", sql.Decimal(10, 2), valorKg)
-                .input("valorTotal", sql.Decimal(10, 2), valorTotal)
-                .query(querySQL);
-    
-            await transaction.commit(); // confirma a transação e salva no banco
-            console.log("Pedido inserido com sucesso!");
-    
+            const pool = await getConnection();
+
+            await pool.request()
+                .input('idCliente', sql.UniqueIdentifier, idCliente)
+                .input('dataPedido', sql.DateTime, dataPedido)
+                .input('tipoEntrega', sql.VarChar(50), tipoEntrega)
+                .input('distanciaEntrega', sql.Decimal(10,2), distanciaEntrega)
+                .input('pesoKg', sql.Decimal(10,2), pesoKg)
+                .input('valorKm', sql.Decimal(10,2), valorKm)
+                .input('valorKg', sql.Decimal(10,2), valorKg)
+                .input("valorTotal", sql.Float, valorTotal)
+                .query(`
+                    INSERT INTO pedidos
+                    (idCliente, dataPedido, tipoEntrega, distanciaEntrega, pesoKg, valorKm, valorKg, valorTotal)
+                    VALUES
+                    (@idCliente, @dataPedido, @tipoEntrega, @distanciaEntrega, @pesoKg, @valorKm, @valorKg, @valorTotal);
+                `);
         } catch (error) {
-            await transaction.rollback(); // desfaz a transação em caso de erro
-            console.error("Erro ao inserir pedido:", error);
+            console.error("Erro ao inserir pedido no banco:", error);
             throw error;
         }
     },
@@ -66,7 +64,7 @@ const pedidoModel = {
     buscarTodos: async () => {
         try {
             const pool = await getConnection();
-    
+
             const querySQL = `
                 SELECT 
                     PD.idPedido,
@@ -82,21 +80,21 @@ const pedidoModel = {
                 INNER JOIN Clientes CL
                     ON CL.idCliente = PD.idCliente
             `;
-    
+
             const result = await pool.request().query(querySQL);
-    
+
             return result.recordset;
-    
+
         } catch (error) {
             console.error("Erro ao buscar pedidos:", error);
             throw error;
         }
     },
-    
+
     atualizarPedido: async (idPedido, idCliente, dataPedido, tipoEntrega, distanciaEntrega, pesoKg, valorKm, valorKg, valorTotal) => {
         try {
             const pool = await getConnection();
-    
+
             const querySQL = `
                 UPDATE Pedidos
                 SET 
@@ -110,7 +108,7 @@ const pedidoModel = {
                     valorTotal = @valorTotal
                 WHERE idPedido = @idPedido
             `;
-    
+
             await pool.request()
                 .input("idPedido", sql.UniqueIdentifier, idPedido)
                 .input("idCliente", sql.UniqueIdentifier, idCliente)
@@ -122,7 +120,7 @@ const pedidoModel = {
                 .input("valorKg", sql.Decimal(10, 2), valorKg)
                 .input("valorTotal", sql.Decimal(10, 2), valorTotal)
                 .query(querySQL);
-    
+
         } catch (error) {
             console.error("Erro ao atualizar pedido:", error);
             throw error;
@@ -131,27 +129,26 @@ const pedidoModel = {
 
     deletarPedido: async (idPedido) => {
         const pool = await getConnection();
-        const transaction = new sql.Transaction(pool);
-        await transaction.begin();
-    
+        const transaction = new sql.Transaction(pool); // conjunto de conexões 
+        await transaction.begin(); // inicio de um bloco de codigo
+
         try {
             const querySQL = `
                 DELETE FROM Pedidos
                 WHERE idPedido = @idPedido
             `;
-    
+
             await transaction.request()
                 .input("idPedido", sql.UniqueIdentifier, idPedido)
                 .query(querySQL);
-    
+
             await transaction.commit();
         } catch (error) {
-            await transaction.rollback();
+            await transaction.rollback(); //reverte uma operação para o estado anterior
             console.error("Erro ao deletar pedido:", error);
             throw error;
         }
     },
-    
-    
+
 }
 module.exports = { pedidoModel };

@@ -1,6 +1,7 @@
-const { pedidoModel } = require("../models/pedidoModel");
-const { clienteModel } = require("../models/clienteModel");
-const { entregaModel } = require("../models/entregaModel");
+const { pedidoModel } = require("../models/pedidoModel.js");
+const { clienteModel } = require("../models/clienteModel.js");
+const { entregaModel } = require("../models/entregaModel.js");
+
 
 const pedidoController = {
     /**
@@ -16,65 +17,60 @@ const pedidoController = {
 
     criarPedido: async (req, res) => {
         try {
-            const { idPedido, idCliente, dataPedido, tipoEntrega, distanciaEntrega, pesoKg, valorKm, valorKg } = req.body;
-    
-            // Verifica se todos os campos obrigatórios foram preenchidos
-            if (
-                idPedido == undefined ||
-                idCliente == undefined ||
-                dataPedido == undefined ||
-                tipoEntrega == undefined ||
-                distanciaEntrega == undefined ||
-                pesoKg == undefined ||
-                valorKm == undefined ||
-                valorKg == undefined
-            ) {
-                return res.status(400).json({ Erro: "Campos obrigatórios não foram preenchidos!" });
+            const {
+                idCliente,
+                dataPedido,
+                tipoEntrega,
+                distanciaEntrega,
+                pesoKg,
+                valorKm,
+                valorKg
+            } = req.body;
+
+            // Verifica campos que são obrigatórios
+            if (!idCliente || !dataPedido || !tipoEntrega || !distanciaEntrega || !pesoKg || !valorKm || !valorKg) {
+                return res.status(400).json({ erro: "Campos obrigatórios não foram preenchidos!" });
             }
-    
-            //verifica se o ID do pedido é valido
-            if (idPedido.length != 36) {
-                return res.status(400).json({ Erro: "Id do Pedido inválido" });
-            }
-    
-            //verifica se o ID do cliente é valido
-            if (idCliente.length != 36) {
-                return res.status(400).json({ Erro: "Id do Cliente inválido" });
-            }
-    
-            // Verifica primeiro se o cliente existe
+
+            // Verifica se o cliente existe
             const cliente = await clienteModel.buscarUm(idCliente);
-    
-            if (!cliente || cliente.length != 1) {
-                return res.status(404).json({ Erro: "Cliente não foi encontrado!" });
+            if (!cliente || cliente.length !== 1) {
+                return res.status(404).json({ erro: "Cliente não encontrado!" });
             }
-    
-            // Valida o tipo de entrega como normal ou entrega urgente
+
+            // Valida tipo de entrega
             const tiposValidos = ["normal", "urgente"];
-            if (!tiposValidos.includes(tipoEntrega.toLowerCase())) {
-                return res.status(400).json({ Erro: "Tipo de entrega inválido! Escolha entre 'normal' ou 'urgente'!" });
+            if (!tiposValidos.includes(tipoEntrega)) {
+                return res.status(400).json({ erro: "Tipo de entrega inválido! Escolha 'normal' ou 'urgente'." });
             }
-    
-            // Valida os valores numéricos da distancia, peso e valor da entrega
+
+            // Calcula o acréscimo de 20% se entrega for urgente
+            let acrescimo = 0;
+            if (tipoEntrega === "urgente") {
+                const valorBase = (distanciaKm * valorPorKm) + (pesoKg * valorPorKg); 
+                acrescimo = valorBase * 0.20; 
+            }
+
+
+            // Valida os números do peso e distancia
             if (isNaN(distanciaEntrega) || distanciaEntrega <= 0) {
-                return res.status(400).json({ Erro: "Distância de entrega inválida. Informe em KM" });
+                return res.status(400).json({ erro: "Distância inválida." });
             }
             if (isNaN(pesoKg) || pesoKg <= 0) {
-                return res.status(400).json({ Erro: "Peso inválido. O peso deve ser em KG!" });
+                return res.status(400).json({ erro: "Peso inválido." });
             }
             if (isNaN(valorKm) || valorKm <= 0) {
-                return res.status(400).json({ Erro: "Valor inválido. Diga em KM" });
+                return res.status(400).json({ erro: "Valor por km inválido." });
             }
             if (isNaN(valorKg) || valorKg <= 0) {
-                return res.status(400).json({ Erro: "Valor inválido. Diga em KG" });
+                return res.status(400).json({ erro: "Valor por kg inválido." });
             }
-    
-            // Cálculo do valor total do pedido
+
+            // Calcula valor total
             const valorTotal = (distanciaEntrega * valorKm) + (pesoKg * valorKg);
-    
-            // Insere o pedido no banco de dados
+
+            // Insere os dados no banco
             await pedidoModel.inserirPedido(
-                idPedido,
                 idCliente,
                 dataPedido,
                 tipoEntrega,
@@ -84,15 +80,19 @@ const pedidoController = {
                 valorKg,
                 valorTotal
             );
-    
-            res.status(201).json({ message: "Pedido cadastrado com sucesso!" });
-    
+
+            // Retorna o valor total calculado
+            res.status(201).json({
+                message: "Pedido cadastrado com sucesso!",
+                valorTotal
+            });
+
         } catch (error) {
             console.error("Erro ao cadastrar pedido:", error);
-            res.status(500).json({ Erro: "Erro interno no servidor ao cadastrar pedido!" });
+            res.status(500).json({ erro: "Erro interno no servidor ao cadastrar pedido." });
         }
-    },    
-    
+    },
+
     // lista todos os pedidos existentes
     listarPedidos: async (req, res) => {
         try {
@@ -109,36 +109,36 @@ const pedidoController = {
         try {
             const { idPedido } = req.params;
             const { idCliente, dataPedido, tipoEntrega, distanciaEntrega, pesoKg, valorKm, valorKg } = req.body;
-    
+
             // Verifica se o ID do pedido é valido
             if (idPedido.length != 36) {
                 return res.status(400).json({ erro: "ID do pedido inválido" });
             }
-    
+
             // Busca o pedido existente no banco de dados
             const pedido = await pedidoModel.buscarUm(idPedido);
-    
+
             if (!pedido || pedido.length !== 1) {
-                return res.status(404).json({ erro: "Pedido não encontrado!" });
+                return res.status(400).json({ erro: "Pedido não encontrado!" });
             }
-    
+
             // Se foi enviado um ID, verifica se ele é válido e existe
             if (idCliente) {
                 if (idCliente.length != 36) {
                     return res.status(400).json({ erro: "ID do cliente inválido" });
                 }
-    
+
                 const cliente = await clienteModel.buscarUm(idCliente);
-    
+
                 if (!cliente || cliente.length !== 1) {
                     return res.status(404).json({ erro: "Cliente não encontrado!" });
                 }
             }
-    
+
             //guarda todos os dados atuais do pedido
             const pedidoAtual = pedido[0];
-    
-            //mantém valores antigos caso algum campo não seja enviado no body
+
+            //o ?? mantém os valores antigos caso algum campo não seja enviado no body
             const idClienteAtualizado = idCliente ?? pedidoAtual.idCliente;
             const dataPedidoAtualizado = dataPedido ?? pedidoAtual.dataPedido;
             const tipoEntregaAtualizado = tipoEntrega ?? pedidoAtual.tipoEntrega;
@@ -146,17 +146,17 @@ const pedidoController = {
             const pesoKgAtualizado = pesoKg ?? pedidoAtual.pesoKg;
             const valorKmAtualizado = valorKm ?? pedidoAtual.valorKm;
             const valorKgAtualizado = valorKg ?? pedidoAtual.valorKg;
-    
-            //Valida o tipo da entrega caso tenha sido alterado
+
+            //Valida o tipo da entrega caso tenha sido alterado // && verifica se o valor existe e se foi enviado no body da requisição.
             if (tipoEntrega && !["normal", "urgente"].includes(tipoEntrega.toLowerCase())) {
                 return res.status(400).json({ erro: "Tipo de entrega inválido! Escolha 'normal' ou 'urgente'." });
             }
-    
+
             //calcula de novo o valor total caso algum campo que influencia o valor tenha mudado
             const valorTotalAtualizado =
                 (distanciaEntregaAtualizado * valorKmAtualizado) +
                 (pesoKgAtualizado * valorKgAtualizado);
-    
+
             // chama o model para atualizar o pedido
             await pedidoModel.atualizarPedido(
                 idPedido,
@@ -170,7 +170,7 @@ const pedidoController = {
                 valorTotalAtualizado
             );
             res.status(200).json({ mensagem: "Pedido atualizado com sucesso!" });
-    
+
         } catch (error) {
             console.error("Erro ao atualizar pedido:", error);
             res.status(500).json({ erro: "Erro interno no servidor ao atualizar pedido" });
@@ -180,28 +180,26 @@ const pedidoController = {
     deletarPedido: async (req, res) => {
         try {
             const { idPedido } = req.params;
-    
+
             // Verifica se o ID do pedido é válido
             if (idPedido.length != 36) {
                 return res.status(400).json({ erro: "ID do pedido inválido!" });
             }
-    
+
             //verifica se o pedido existe no banco de dados
             const pedido = await pedidoModel.buscarUm(idPedido);
-    
+
             if (!pedido || pedido.length !== 1) {
-                return res.status(404).json({ erro: "Pedido não foi encontrado!" });
+                return res.status(400).json({ erro: "Pedido não foi encontrado!" });
             }
-    
+
             await pedidoModel.deletarPedido(idPedido);
             res.status(200).json({ mensagem: "O pedido foi deletado com sucesso!" });
-    
+
         } catch (error) {
             console.error("Erro ao deletar pedido:", error);
             res.status(500).json({ erro: "Erro interno no servidor ao deletar pedido!" });
         }
     },
-    
-};
-
+}
 module.exports = { pedidoController };
