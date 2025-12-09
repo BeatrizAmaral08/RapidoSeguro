@@ -1,9 +1,9 @@
 const sql = require("mssql");
 
 const config = {
-    user: "PedroPonciano_SQLLogin_1",
-    password: "qfogvno1gu",
-    server: "RapidoSeguro.mssql.somee.com",
+    user: process.env.USER_DB,
+    password: process.env.PASSWORD_DB,
+    server: process.env.SERVER_DB,
     database: "RapidoSeguro",
     options: {
         encrypt: true,
@@ -17,8 +17,16 @@ async function getConnection() {
         return pool;
     } catch (error) {
         console.error("Erro na conexão com o SQL Server:", error);
-        return null; // importante retornar algo
+        return null; 
     }
 }
+
+(async () => {
+    const pool = await getConnection();
+
+    if (pool) {
+        console.log("Conexão com o banco de dados bem-sucedida!");
+    }
+})();
 
 module.exports = { sql, getConnection };

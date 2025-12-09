@@ -3,9 +3,8 @@ const express = require("express");
 const router = express.Router();
 const { entregaController } = require("../controller/entregaController.js");
 
-/*
- * define as rotas relacionadas às entregas
- * 
+/**
+ * Rotas relacionadas às entregas
  * @module entregaRoutes
  * 
  * @description

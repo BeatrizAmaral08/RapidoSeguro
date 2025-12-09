@@ -4,15 +4,15 @@ const { entregaModel } = require("../models/entregaModel.js");
 
 
 const pedidoController = {
+
     /**
-     * controlador que lista todos os pedidos do banco de dados
-     * 
      * @async
-     * @function listarPedidos
-     * @param {object} req objeto da requisição (recebido do cliente HTTP)
-     * @param {object} res objeto da resposta (enviado ao cliente HTTP)
-     * @returns {promise</void>} retorna uma resposta JSON com a lista de produtos
-     * @throws mostra no console e retorna erro 500 se ocorrer falha ao buscar os pedidos 
+     * @function criarPedido
+     * @description Cria um novo pedido no sistema após validar cliente, dados enviados e calcular o valor total
+     * @param {object} req - Requisição HTTP recebida do cliente
+     * @param {object} res - Resposta HTTP enviada pelo servidor
+     * @returns {Promise<void>} Retorna mensagem de sucesso e valor total calculado
+     * @throws Retorna status 400 para erros de validação e 500 para falhas internas
      */
 
     criarPedido: async (req, res) => {
@@ -27,7 +27,7 @@ const pedidoController = {
                 valorKg
             } = req.body;
 
-            // Verifica campos que são obrigatórios
+            // Verifica campos obrigatórios
             if (!idCliente || !dataPedido || !tipoEntrega || !distanciaEntrega || !pesoKg || !valorKm || !valorKg) {
                 return res.status(400).json({ erro: "Campos obrigatórios não foram preenchidos!" });
             }
@@ -38,21 +38,13 @@ const pedidoController = {
                 return res.status(404).json({ erro: "Cliente não encontrado!" });
             }
 
-            // Valida tipo de entrega
+            // Validação do tipo
             const tiposValidos = ["normal", "urgente"];
             if (!tiposValidos.includes(tipoEntrega)) {
                 return res.status(400).json({ erro: "Tipo de entrega inválido! Escolha 'normal' ou 'urgente'." });
             }
 
-            // Calcula o acréscimo de 20% se entrega for urgente
-            let acrescimo = 0;
-            if (tipoEntrega === "urgente") {
-                const valorBase = (distanciaKm * valorPorKm) + (pesoKg * valorPorKg); 
-                acrescimo = valorBase * 0.20; 
-            }
-
-
-            // Valida os números do peso e distancia
+            // Valida números
             if (isNaN(distanciaEntrega) || distanciaEntrega <= 0) {
                 return res.status(400).json({ erro: "Distância inválida." });
             }
@@ -69,7 +61,7 @@ const pedidoController = {
             // Calcula valor total
             const valorTotal = (distanciaEntrega * valorKm) + (pesoKg * valorKg);
 
-            // Insere os dados no banco
+            // Agora o model já insere pedido + entrega usando transaction
             await pedidoModel.inserirPedido(
                 idCliente,
                 dataPedido,
@@ -81,17 +73,26 @@ const pedidoController = {
                 valorTotal
             );
 
-            // Retorna o valor total calculado
-            res.status(201).json({
-                message: "Pedido cadastrado com sucesso!",
+            return res.status(200).json({
+                mensagem: "Pedido e entrega cadastrados com sucesso!",
                 valorTotal
             });
 
         } catch (error) {
-            console.error("Erro ao cadastrar pedido:", error);
-            res.status(500).json({ erro: "Erro interno no servidor ao cadastrar pedido." });
+            console.error("Erro ao criar pedido:", error);
+            return res.status(500).json({ erro: "Erro interno ao criar pedido." });
         }
     },
+
+    /**
+     * @async
+     * @function listarPedidos
+     * @description Lista todos os pedidos cadastrados no banco de dados
+     * @param {object} req - Objeto da requisição
+     * @param {object} res - Objeto da resposta
+     * @returns {Promise<void>} Retorna um array com todos os pedidos
+     * @throws Retorna erro 500 caso haja falha ao buscar pedidos
+     */
 
     // lista todos os pedidos existentes
     listarPedidos: async (req, res) => {
@@ -104,6 +105,16 @@ const pedidoController = {
             res.status(500).json({ erro: "Erro interno no servidor ao listar pedidos" });
         }
     },
+
+    /**
+    * @async
+    * @function atualizarPedido
+    * @description Atualiza um pedido existente, realizando validações e recalculando o valor total quando necessário
+    * @param {object} req - Requisição contendo params e body
+    * @param {object} res - Resposta enviada ao cliente
+    * @returns {Promise<void>} Retorna mensagem de sucesso ao atualizar pedido
+    * @throws Retorna erros 400, 404 ou 500 dependendo do cenário
+    */
 
     atualizarPedido: async (req, res) => {
         try {
@@ -135,10 +146,10 @@ const pedidoController = {
                 }
             }
 
-            //guarda todos os dados atuais do pedido
+            // guarda todos os dados atuais do pedido
             const pedidoAtual = pedido[0];
 
-            //o ?? mantém os valores antigos caso algum campo não seja enviado no body
+            // o ?? mantém os valores antigos caso algum campo não seja enviado no body
             const idClienteAtualizado = idCliente ?? pedidoAtual.idCliente;
             const dataPedidoAtualizado = dataPedido ?? pedidoAtual.dataPedido;
             const tipoEntregaAtualizado = tipoEntrega ?? pedidoAtual.tipoEntrega;
@@ -147,12 +158,12 @@ const pedidoController = {
             const valorKmAtualizado = valorKm ?? pedidoAtual.valorKm;
             const valorKgAtualizado = valorKg ?? pedidoAtual.valorKg;
 
-            //Valida o tipo da entrega caso tenha sido alterado // && verifica se o valor existe e se foi enviado no body da requisição.
+            // Valida o tipo da entrega caso tenha sido alterado
             if (tipoEntrega && !["normal", "urgente"].includes(tipoEntrega.toLowerCase())) {
                 return res.status(400).json({ erro: "Tipo de entrega inválido! Escolha 'normal' ou 'urgente'." });
             }
 
-            //calcula de novo o valor total caso algum campo que influencia o valor tenha mudado
+            // calcula de novo o valor total caso algum campo que influencia o valor tenha mudado
             const valorTotalAtualizado =
                 (distanciaEntregaAtualizado * valorKmAtualizado) +
                 (pesoKgAtualizado * valorKgAtualizado);
@@ -169,13 +180,36 @@ const pedidoController = {
                 valorKgAtualizado,
                 valorTotalAtualizado
             );
-            res.status(200).json({ mensagem: "Pedido atualizado com sucesso!" });
+
+            // atualiza a entrega relacionada ao pedido
+            await entregaModel.atualizarEntregaPorPedido(
+                idPedido,
+                tipoEntregaAtualizado,
+                distanciaEntregaAtualizado,
+                pesoKgAtualizado,
+                valorKmAtualizado,
+                valorKgAtualizado
+            );
+
+            return res.status(200).json({
+                mensagem: "Pedido e entrega atualizados com sucesso!"
+            });
 
         } catch (error) {
             console.error("Erro ao atualizar pedido:", error);
             res.status(500).json({ erro: "Erro interno no servidor ao atualizar pedido" });
         }
     },
+
+    /**
+     * @async
+     * @function deletarPedido
+     * @description Deleta um pedido existente no sistema após validar seu ID
+     * @param {object} req - Requisição contendo o ID do pedido
+     * @param {object} res - Resposta enviada ao usuário
+     * @returns {Promise<void>} Retorna mensagem de confirmação
+     * @throws Retorna erro 400, 404 ou 500
+     */
 
     deletarPedido: async (req, res) => {
         try {
@@ -193,8 +227,17 @@ const pedidoController = {
                 return res.status(400).json({ erro: "Pedido não foi encontrado!" });
             }
 
-            await pedidoModel.deletarPedido(idPedido);
-            res.status(200).json({ mensagem: "O pedido foi deletado com sucesso!" });
+           const possuiEntrega = await pedidoModel.temEntrega(idPedido);
+
+        if (possuiEntrega) {
+            return res.status(400).json({
+                erro: "Não é possível deletar um pedido que possui entrega cadastrada."
+            });
+        }
+        
+        await pedidoModel.deletarPedido(idPedido);
+        
+        return res.status(200).json({ mensagem: "Pedido deletado com sucesso!" });
 
         } catch (error) {
             console.error("Erro ao deletar pedido:", error);

@@ -2,14 +2,35 @@ const { clienteModel } = require("../models/clienteModel.js");
 
 const clienteController = {
 
+     /**
+     * @async
+     * @function criarCliente
+     * @description Cadastra um novo cliente no sistema após validar todos os campos obrigatórios
+     * @param {*} req - Objeto da requisição contendo nomeCliente, cpfCliente, telefone, email e endereco no corpo
+     * @param {*} res - Objeto da resposta enviado ao cliente HTTP
+     * @returns {Promise<Object>} Retorna uma mensagem de sucesso e o ID do cliente cadastrado
+     */
+
     criarCliente: async (req, res) => {
         try {
             const { nomeCliente, cpfCliente, telefone, email, endereco } = req.body;
 
-            // validação correta
             if (!nomeCliente || !cpfCliente || !telefone || !email || !endereco) {
                 return res.status(400).json({ erro: "Campos obrigatórios não foram preenchidos" });
             }
+
+            //verifica se CPF do cliente já está no sistema
+        const cpfExiste = await clienteModel.buscarCpf(cpfCliente);
+
+        if (cpfExiste.length > 0) {
+            return res.status(400).json({ erro: "CPF já cadastrado no sistema!" });
+        }
+
+        // verifica se o email esta duplicado
+        const emailExiste = await clienteModel.buscarEmail(email);
+        if (emailExiste.length > 0) {
+            return res.status(400).json({ erro: "E-mail já cadastrado no sistema!" });
+        }
 
             const result = await clienteModel.inserirCliente(
                 nomeCliente,
@@ -19,7 +40,7 @@ const clienteController = {
                 endereco
             );
 
-            res.status(201).json({
+            res.status(200).json({
                 mensagem: "Usuário cadastrado com sucesso!",
                 idCliente: result.idCliente
             });
@@ -29,6 +50,15 @@ const clienteController = {
             res.status(500).json({ erro: "Erro no servidor ao cadastrar usuário!" });
         }
     },
+
+    /**
+     * @async
+     * @function listarClientes
+     * @description Lista todos os clientes cadastrados ou apenas um cliente específico quando fornecido um ID
+     * @param {*} req - Objeto da requisição. Pode conter idCliente em req.query
+     * @param {*} res - Objeto da resposta enviado ao cliente HTTP
+     * @returns {Promise<Array|Object>} Retorna a lista completa de clientes ou o cliente correspondente ao ID
+     */
 
     listarClientes: async (req, res) => {
         try {
@@ -53,9 +83,18 @@ const clienteController = {
         }
     },
 
+     /**
+     * @async
+     * @function atualizarCliente
+     * @description Atualiza os dados de um cliente existente. Caso algum campo não seja enviado, mantém o valor atual
+     * @param {*} req - Objeto da requisição contendo o idCliente em params e os novos dados no body
+     * @param {*} res - Objeto da resposta enviado ao cliente HTTP
+     * @returns {Promise<Object>} Retorna uma mensagem confirmando a atualização do cliente
+     */
+
     atualizarCliente: async (req, res) => {
         try {
-            const { idCliente } = req.params; // aceitar um numero variavel
+            const { idCliente } = req.params; 
             const { nomeCliente, cpfCliente, telefone, email, endereco } = req.body;
 
             // verifica se o ID é válido
@@ -67,10 +106,42 @@ const clienteController = {
             const cliente = await clienteModel.buscarUm(idCliente);
 
             if (!cliente || cliente.length !== 1) {
-                return res.status(404).json({ erro: "Cliente não encontrado" });
+                return res.status(400).json({ erro: "Cliente não encontrado" });
             }
 
             const atual = cliente[0];
+
+            // valida se CPF está vindo no body
+        if (cpfCliente) {
+
+            // não permite atualizar o mesmo CPF já existente
+            if (cpfCliente === atual.cpfCliente) {
+                return res.status(400).json({ erro: "O CPF atual não pode ser igual ao antigo" });
+            }
+
+            //verifica se o CPF pertence a outro cliente
+            const cpfExiste = await clienteModel.buscarCpf(cpfCliente);
+
+            if (cpfExiste.length > 0) {
+                return res.status(400).json({ erro: "Este CPF já foi cadastrado" });
+            }
+        }
+
+         //validação do email
+        if (email) {
+
+            // não permite atualizar o mesmo email se já existente
+            if (email === atual.emailCliente) {
+                return res.status(400).json({ erro: "O email atual não pode ser igual ao antigo" });
+            }
+
+            // verifica se o email pertence a outro cliente
+            const emailExiste = await clienteModel.buscarEmail(email);
+
+            if (emailExiste.length > 0) {
+                return res.status(400).json({ erro: "Este email já foi cadastrado" });
+            }
+        }
 
             // usa o ?? para manter o valor antigo quando não vier no body
             const nomeNovo = nomeCliente ?? atual.nomeCliente;
@@ -96,11 +167,20 @@ const clienteController = {
         }
     },
 
-   deletarCliente: async (req, res) => {
+    /**
+     * @async
+     * @function deletarCliente
+     * @description Remove um cliente do sistema com base no ID fornecido
+     * @param {*} req - Objeto da requisição contendo idCliente em params
+     * @param {*} res - Objeto da resposta enviado ao cliente HTTP
+     * @returns {Promise<Object>} Retorna uma mensagem confirmando que o cliente foi deletado
+     */
+
+  deletarCliente: async (req, res) => {
     try {
         const { idCliente } = req.params;
 
-        // verificase o ID tem 36 caracteres
+        // verifica se o ID tem 36 caracteres
         if (!idCliente || idCliente.length !== 36) {
             return res.status(400).json({ erro: "ID do cliente inválido" });
         }
@@ -110,7 +190,16 @@ const clienteController = {
 
         // verifica se encontrou algum cliente //array.isarray verifica se um valor é um array
         if (!cliente || !Array.isArray(cliente) || cliente.length !== 1) {
-            return res.status(404).json({ erro: "Cliente não encontrado!" });
+            return res.status(400).json({ erro: "Cliente não encontrado!" });
+        }
+
+        //não permite deletar clientes que tenham pedido
+        const possuiPedidos = await clienteModel.existePedidos(idCliente);
+
+        if (possuiPedidos) {
+            return res.status(409).json({
+                erro: "Não é possível deletar um cliente que possui pedidos cadastrados."
+            });
         }
 
         // deleta o cliente
@@ -120,10 +209,9 @@ const clienteController = {
 
     } catch (error) {
         console.error("Erro ao deletar cliente:", error);
-        return res.status(500).json({ erro: "Erro interno ao deletar cliente" });
+        return res.status(500).json({ erro: "Cliente não pode ser deletado pois hà pedidos em andamento" });
     }
 },
-
 };
 
 module.exports = { clienteController };

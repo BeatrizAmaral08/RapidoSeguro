@@ -1,80 +1,98 @@
 const { entregaModel } = require("../models/entregaModel.js");
 const { pedidoModel } = require("../models/pedidoModel.js");
 
-const entregaController = { 
-criarEntrega: async (req, res) => {
-    try {
-        const { 
-            idPedido,
-            distanciaKm,
-            valorPorKm,
-            pesoKg,
-            valorPorKg,
-            tipoEntrega,
-            statusEntrega 
-        } = req.body;
+const entregaController = {
 
-        if (!idPedido || !distanciaKm || !valorPorKm || !pesoKg || !valorPorKg || !tipoEntrega) {
-            return res.status(400).json({ Erro: "Campos obrigatórios não foram preenchidos" });
-        }
+    /**
+    * @async
+    * @function criarEntrega
+    * @description Cria uma entrega, valida os dados do pedido, calcula custos e salva no banco
+    * @param {*} req - Objeto da requisição contendo os dados da entrega no body
+    * @param {*} res - Objeto da resposta enviado ao cliente HTTP
+    * @returns {Promise<Object>} Retorna mensagem de sucesso e os custos calculados
+    */
 
-        if (idPedido.length !== 36) {
-            return res.status(400).json({ Erro: "Id do Pedido inválido" });
-        }
+    criarEntrega: async (req, res) => {
+        try {
+            const {
+                idPedido,
+                distanciaKm,
+                valorPorKm,
+                pesoKg,
+                valorPorKg,
+                tipoEntrega,
+                statusEntrega
+            } = req.body;
 
-        const pedido = await pedidoModel.buscarUm(idPedido);
-        if (!pedido || pedido.length !== 1) {
-            return res.status(400).json({ Erro: "Pedido não encontrado" });
-        }
-
-        //includes verifica se um determinado valor existe dentro de um array 
-        if (!["normal", "urgente"].includes(tipoEntrega.toLowerCase())) { //toLowerCase torna a palavra em letras minusculas
-            return res.status(400).json({ Erro: "Tipo de entrega inválido, use: normal ou urgente" });
-        }
-
-        // status de entrega
-        const statusPermitidos = ["calculado", "emTransito", "entregue", "cancelado"];
-
-        // valida se o cliente mandou status
-        let statusFinal = "calculado"; 
-
-        if (statusEntrega) {
-            if (!statusPermitidos.includes(statusEntrega)) {
-                return res.status(400).json({ Erro: "Status inválido! Use: calculado, emTransito, entregue ou cancelado" });
+            if (!idPedido || !distanciaKm || !valorPorKm || !pesoKg || !valorPorKg || !tipoEntrega) {
+                return res.status(400).json({ Erro: "Campos obrigatórios não foram preenchidos" });
             }
-            statusFinal = statusEntrega;
+
+            if (idPedido.length !== 36) {
+                return res.status(400).json({ Erro: "Id do Pedido inválido" });
+            }
+
+            const pedido = await pedidoModel.buscarUm(idPedido);
+            if (!pedido || pedido.length !== 1) {
+                return res.status(400).json({ Erro: "Pedido não encontrado" });
+            }
+
+            //includes verifica se um determinado valor existe dentro de um array 
+            if (!["normal", "urgente"].includes(tipoEntrega.toLowerCase())) { //toLowerCase torna a palavra em letras minusculas
+                return res.status(400).json({ Erro: "Tipo de entrega inválido, use: normal ou urgente" });
+            }
+
+            // status de entrega
+            const statusPermitidos = ["calculado", "emTransito", "entregue", "cancelado"];
+
+            // valida se o cliente mandou status
+            let statusFinal = "calculado";
+
+            if (statusEntrega) {
+                if (!statusPermitidos.includes(statusEntrega)) {
+                    return res.status(400).json({ Erro: "Status inválido! Use: calculado, emTransito, entregue ou cancelado" });
+                }
+                statusFinal = statusEntrega;
+            }
+
+            const custos = entregaModel.calcularCustoEntrega({
+                distanciaKm,
+                valorPorKm,
+                pesoKg,
+                valorPorKg,
+                tipoEntrega
+            });
+
+            await entregaModel.inserirEntrega(
+                idPedido,
+                custos.valorDistancia,
+                custos.valorPeso,
+                custos.acrescimo,
+                custos.desconto,
+                custos.taxaExtra,
+                custos.valorFinal,
+                statusFinal
+            );
+
+            res.status(200).json({
+                mensagem: "Entrega cadastrada e calculada com sucesso",
+                custos
+            });
+
+        } catch (error) {
+            console.error("Erro ao cadastrar entrega:", error);
+            res.status(500).json({ Erro: "Erro interno no servidor ao cadastrar entrega!" });
         }
+    },
 
-        const custos = entregaModel.calcularCustoEntrega({
-            distanciaKm,
-            valorPorKm,
-            pesoKg,
-            valorPorKg,
-            tipoEntrega
-        });
-
-        await entregaModel.inserirEntrega(
-            idPedido,
-            custos.valorDistancia,
-            custos.valorPeso,
-            custos.acrescimo,
-            custos.desconto,
-            custos.taxaExtra,
-            custos.valorFinal,
-            statusFinal 
-        );
-
-        res.status(200).json({
-            mensagem: "Entrega cadastrada e calculada com sucesso",
-            custos
-        });
-
-    } catch (error) {
-        console.error("Erro ao cadastrar entrega:", error);
-        res.status(500).json({ Erro: "Erro interno no servidor ao cadastrar entrega!" });
-    }
-},
-
+    /**
+     * @async
+     * @function buscarEntrega
+     * @description Busca uma entrega específica pelo ID
+     * @param {*} req - Objeto da requisição contendo idEntrega em params
+     * @param {*} res - Objeto da resposta enviado ao cliente HTTP
+     * @returns {Promise<Object>} Retorna a entrega correspondente ao ID informado
+     */
 
     buscarEntrega: async (req, res) => {
         try {
@@ -98,6 +116,16 @@ criarEntrega: async (req, res) => {
         }
     },
 
+
+    /**
+     * @async
+     * @function listarEntregas
+     * @description Retorna todas as entregas cadastradas
+     * @param {*} req - Objeto da requisição
+     * @param {*} res - Objeto da resposta enviado ao cliente HTTP
+     * @returns {Promise<Array>} Lista de todas as entregas registradas
+     */
+
     listarEntregas: async (req, res) => {
         try {
             const entregas = await entregaModel.buscarTodas();
@@ -109,95 +137,114 @@ criarEntrega: async (req, res) => {
         }
     },
 
+    /**
+     * @async
+     * @function atualizarEntrega
+     * @description Atualiza dados de uma entrega existente e recalcula custos caso necessário
+     * @param {*} req - Objeto da requisição contendo idEntrega em params e campos a serem atualizados no body
+     * @param {*} res - Objeto da resposta enviado ao cliente HTTP
+     * @returns {Promise<Object>} Mensagem confirmando a atualização da entrega
+     */
+
     atualizarEntrega: async (req, res) => {
-    try {
-        const { idEntrega } = req.params;
+        try {
+            const { idEntrega } = req.params;
 
-        if (!idEntrega || idEntrega.length !== 36) {
-            return res.status(400).json({ erro: "ID da entrega inválido" });
-        }
+            if (!idEntrega || idEntrega.length !== 36) {
+                return res.status(400).json({ erro: "ID da entrega inválido" });
+            }
 
-        const entregaExistente = await entregaModel.buscarUmaEntrega(idEntrega);
-        if (!entregaExistente || entregaExistente.length === 0) {
-            return res.status(404).json({ erro: "Entrega não encontrada!" });
-        }
+            const entregaExistente = await entregaModel.buscarUmaEntrega(idEntrega);
+            if (!entregaExistente || entregaExistente.length === 0) {
+                return res.status(404).json({ erro: "Entrega não encontrada!" });
+            }
 
-        // Campos que podem ser atualizados
-        const {
-            idPedido,
-            distanciaKm,
-            valorPorKm,
-            pesoKg,
-            valorPorKg,
-            tipoEntrega,
-            statusEntrega
-        } = req.body;
+            // Campos que podem ser atualizados
+            const {
+                idPedido,
+                distanciaKm,
+                valorPorKm,
+                pesoKg,
+                valorPorKg,
+                tipoEntrega,
+                statusEntrega
+            } = req.body;
 
-        // valida o status da entrega
-        const statusPermitidos = ["calculado", "emTransito", "entregue", "cancelado"];
+            // valida o status da entrega
+            const statusPermitidos = ["calculado", "emTransito", "entregue", "cancelado"];
 
-        if (statusEntrega && !statusPermitidos.includes(statusEntrega)) {
-            return res.status(400).json({
-                erro: "Status inválido! Use: calculado, em_transito, entregue ou cancelado"
+            if (statusEntrega && !statusPermitidos.includes(statusEntrega)) {
+                return res.status(400).json({
+                    erro: "Status inválido! Use: calculado, em_transito, entregue ou cancelado"
+                });
+            }
+
+            // valido o tipo de entrega // toLowerCase para validar as palavras com letra minuscula
+            if (tipoEntrega && !["normal", "urgente"].includes(tipoEntrega.toLowerCase())) {
+                return res.status(400).json({
+                    erro: "Tipo de entrega inválido! Use: normal ou urgente"
+                });
+            }
+
+            // recalcula os custos se algum dado mudar
+            let valorDistancia = entregaExistente[0].valorDistancia;
+            let valorPeso = entregaExistente[0].valorPeso;
+            let acrescimo = entregaExistente[0].acrescimo;
+            let desconto = entregaExistente[0].desconto;
+            let taxaExtra = entregaExistente[0].taxaExtra;
+            let valorFinal = entregaExistente[0].valorFinal;
+
+            const houveMudancaNosValores =
+                distanciaKm || valorPorKm || pesoKg || valorPorKg || tipoEntrega;
+
+            if (houveMudancaNosValores) {
+                const novosCustos = entregaModel.calcularCustoEntrega({
+                    distanciaKm: distanciaKm ?? entregaExistente[0].distanciaKm,
+                    valorPorKm: valorPorKm ?? entregaExistente[0].valorPorKm,
+                    pesoKg: pesoKg ?? entregaExistente[0].pesoKg,
+                    valorPorKg: valorPorKg ?? entregaExistente[0].valorPorKg,
+                    tipoEntrega: tipoEntrega ?? entregaExistente[0].tipoEntrega
+                });
+
+                valorDistancia = novosCustos.valorDistancia;
+                valorPeso = novosCustos.valorPeso;
+                acrescimo = novosCustos.acrescimo;
+                desconto = novosCustos.desconto;
+                taxaExtra = novosCustos.taxaExtra;
+                valorFinal = novosCustos.valorFinal;
+            }
+
+
+            await entregaModel.atualizarEntrega(
+                idEntrega,
+                idPedido ?? entregaExistente[0].idPedido,
+                valorDistancia,
+                valorPeso,
+                acrescimo,
+                desconto,
+                taxaExtra,
+                valorFinal,
+                statusEntrega ?? entregaExistente[0].statusEntrega
+            );
+
+            return res.status(200).json({
+                mensagem: "Entrega atualizada com sucesso!"
             });
+
+        } catch (erro) {
+            console.error("Erro ao atualizar entrega:", erro);
+            return res.status(500).json({ erro: "Erro ao atualizar entrega" });
         }
+    },
 
-        // valido o tipo de entrega // toLowerCase para validar as palavras com letra minuscula
-        if (tipoEntrega && !["normal", "urgente"].includes(tipoEntrega.toLowerCase())) {
-            return res.status(400).json({
-                erro: "Tipo de entrega inválido! Use: normal ou urgente"
-            });
-        }
-
-        // recalcula os custos se algum dado mudar
-        let valorDistancia = entregaExistente[0].valorDistancia;
-        let valorPeso = entregaExistente[0].valorPeso;
-        let acrescimo = entregaExistente[0].acrescimo;
-        let desconto = entregaExistente[0].desconto;
-        let taxaExtra = entregaExistente[0].taxaExtra;
-        let valorFinal = entregaExistente[0].valorFinal;
-
-        const houveMudancaNosValores =
-            distanciaKm || valorPorKm || pesoKg || valorPorKg || tipoEntrega;
-
-        if (houveMudancaNosValores) {
-            const novosCustos = entregaModel.calcularCustoEntrega({
-                distanciaKm: distanciaKm ?? entregaExistente[0].distanciaKm,
-                valorPorKm: valorPorKm ?? entregaExistente[0].valorPorKm,
-                pesoKg: pesoKg ?? entregaExistente[0].pesoKg,
-                valorPorKg: valorPorKg ?? entregaExistente[0].valorPorKg,
-                tipoEntrega: tipoEntrega ?? entregaExistente[0].tipoEntrega
-            });
-
-            valorDistancia = novosCustos.valorDistancia;
-            valorPeso = novosCustos.valorPeso;
-            acrescimo = novosCustos.acrescimo;
-            desconto = novosCustos.desconto;
-            taxaExtra = novosCustos.taxaExtra;
-            valorFinal = novosCustos.valorFinal;
-        }
-
-        
-        await entregaModel.atualizarEntrega(
-            idEntrega,
-            idPedido ?? entregaExistente[0].idPedido,
-            valorDistancia,
-            valorPeso,
-            acrescimo,
-            desconto,
-            taxaExtra,
-            valorFinal,
-            statusEntrega ?? entregaExistente[0].statusEntrega
-        );
-
-        return res.status(200).json({
-            mensagem: "Entrega atualizada com sucesso!" });
-
-    } catch (erro) {
-        console.error("Erro ao atualizar entrega:", erro);
-        return res.status(500).json({ erro: "Erro ao atualizar entrega" });
-    }
-},
+    /**
+     * @async
+     * @function deletarEntrega
+     * @description Exclui uma entrega existente com base no ID
+     * @param {*} req - Objeto da requisição contendo idEntrega em params
+     * @param {*} res - Objeto da resposta enviado ao cliente HTTP
+     * @returns {Promise<Object>} Mensagem confirmando a exclusão
+     */
 
     deletarEntrega: async (req, res) => {
         try {

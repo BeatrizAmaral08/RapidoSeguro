@@ -3,12 +3,14 @@ const router = express.Router();
 const {pedidoController} = require("../controller/pedidoController.js");
 
 /**
- * define as rotas relacionadas aos pedidos 
- *  
+ * Rotas relacionadas às entregas
  * @module pedidoRoutes
  * 
  * @description
- * GET /pedidos > lista todos os pedidos do banco de dados 
+ * GET /pedidos   - lista todas os pedidos do banco de dados
+ * POST /pedidos    - cria um novo pedido
+ * DELETE /pedidos/:idPedidos   -  exclui um pedido
+ * PUT /pedidos/:idPedido   - atualiza dados dos pedidos
  */
 
 router.get("/pedidos", pedidoController.listarPedidos);

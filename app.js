@@ -1,6 +1,8 @@
 const express = require("express");
 const app = express();
 
+require("dotenv").config();
+
 const { clienteRoutes } = require("./src/routes/clienteRoutes.js");
 const { pedidoRoutes } = require("./src/routes/pedidoRoutes.js");
 const { entregaRoutes } = require("./src/routes/entregaRoutes.js");

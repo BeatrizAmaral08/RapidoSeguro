@@ -2,6 +2,18 @@ const { sql, getConnection } = require("../config/RapidoSeguro");
 
 const entregaModel = {
 
+    /**
+     * @function calcularValor
+     * @description Calcula o valor total da entrega somando distância, peso, acréscimos e taxa extra, e subtraindo descontos
+     * @param {Object} valores - Conjunto de valores usados no cálculo
+     * @param {number} valores.valorDistancia - Valor calculado com base na distância percorrida
+     * @param {number} valores.valorPeso - Valor calculado com base no peso da carga
+     * @param {number} valores.acrescimo - Acréscimo adicional aplicado
+     * @param {number} valores.desconto - Desconto aplicado ao valor total
+     * @param {number} valores.taxaExtra - Taxa adicional para casos específicos
+     * @returns {number} Retorna o valor total final da entrega
+     */
+
     // Calcula o valor total da entrega 
     calcularValor: ({ valorDistancia, valorPeso, acrescimo, desconto, taxaExtra }) => {
         const valorTotal =
@@ -9,6 +21,20 @@ const entregaModel = {
 
         return valorTotal;
     },
+
+    /**
+     * @function inserirEntrega
+     * @async
+     * @description Adiciona uma nova entrega no banco de dados
+     * @param {string} idPedido - ID do pedido vinculado à entrega
+     * @param {number} valorDistancia - Valor calculado pela distância
+     * @param {number} valorPeso - Valor calculado pelo peso
+     * @param {number} acrescimo - Acréscimo aplicado (ex.: entrega urgente)
+     * @param {number} desconto - Desconto aplicado
+     * @param {number} taxaExtra - Taxa extra (ex.: peso acima de 50kg)
+     * @param {number} valorFinal - Valor final da entrega após os cálculos
+     * @param {string} statusEntrega - Status da entrega (ex.: "pendente")
+     */
 
     // adiciona uma nova entrega no banco de dados
     inserirEntrega: async (
@@ -63,6 +89,14 @@ const entregaModel = {
         }
     },
 
+    /**
+     * @function buscarUmaEntrega
+     * @async
+     * @description Busca uma entrega específica pelo ID
+     * @param {string} idEntrega - ID da entrega desejada
+     * @returns {Promise<Array>} Retorna um array contendo os dados da entrega encontrada
+     */
+
     // Busca uma entrega pelo ID
     buscarUmaEntrega: async (idEntrega) => {
         try {
@@ -82,6 +116,15 @@ const entregaModel = {
             throw error;
         }
     },
+
+    
+    /**
+     * @function buscarTodas
+     * @async
+     * @description Lista todas as entregas cadastradas no banco
+     * @returns {Promise<Array>} Um array contendo todas as entregas registradas
+     */
+
     // Lista todas as entregas
     buscarTodas: async () => {
         try {
@@ -98,6 +141,18 @@ const entregaModel = {
             throw error;
         }
     },
+
+     /**
+     * @function calcularCustoEntrega
+     * @description Realiza o cálculo completo do custo da entrega considerando distância, peso, urgência, descontos e taxa extra
+     * @param {Object} dados
+     * @param {number} dados.distanciaKm - Distância percorrida (Km)
+     * @param {number} dados.valorPorKm - Valor cobrado por Km
+     * @param {number} dados.pesoKg - Peso da carga
+     * @param {number} dados.valorPorKg - Valor cobrado por Kg
+     * @param {string} dados.tipoEntrega - Tipo da entrega: "normal" ou "urgente"
+     * @returns {Object} Objeto contendo todos os valores calculados
+     */
 
     // Calculo completo do custo da entrega
     calcularCustoEntrega: ({
@@ -146,6 +201,21 @@ const entregaModel = {
         };
     },
 
+     /**
+     * @function atualizarEntrega
+     * @async
+     * @description Atualiza os dados de uma entrega existente no banco
+     * @param {string} idEntrega - ID da entrega
+     * @param {string} idPedido - ID do pedido vinculado
+     * @param {number} valorDistancia
+     * @param {number} valorPeso
+     * @param {number} acrescimo
+     * @param {number} desconto
+     * @param {number} taxaExtra
+     * @param {number} valorFinal
+     * @param {string} statusEntrega - Status atualizado da entrega
+     */
+
     // atualiza uma entrega existente
     atualizarEntrega: async (
         idEntrega,
@@ -192,6 +262,64 @@ const entregaModel = {
             throw error;
         }
     },
+
+    /**
+     * @async
+     * @function atualizarEntregaPorPedido
+     * @description Atualiza os dados de entrega vinculados a um pedido específico e recalcula o valor total
+     * com base na distância, peso e valores unitários.
+     * @param {string} idPedido - ID do pedido ao qual a entrega está vinculada.
+     * @param {string} tipoEntrega - Tipo da entrega (ex.: "normal" ou "urgente").
+     * @param {number} distanciaEntrega - Distância da entrega em quilômetros.
+     * @param {number} pesoKg - Peso da entrega em quilogramas.
+     * @param {number} valorKm - Valor cobrado por quilômetro.
+     * @param {number} valorKg - Valor cobrado por quilograma.
+     * @returns {Promise<Object>} Retorna o resultado da operação de atualização no banco de dados.
+     * @throws {Error} Lança um erro caso ocorra falha durante a atualização da entrega.
+     */
+    
+    atualizarEntregaPorPedido: async (
+    idPedido,
+    tipoEntrega,
+    distanciaEntrega,
+    pesoKg,
+    valorKm,
+    valorKg
+) => {
+    const pool = await getConnection();
+
+    //recalcular o valor total baseado no pedido atualizado
+    const valorTotal = (distanciaEntrega * valorKm) + (pesoKg * valorKg);
+
+    const resultado = await pool.request()
+        .input("idPedido", sql.Char(36), idPedido)
+        .input("tipoEntrega", sql.VarChar(20), tipoEntrega)
+        .input("distanciaEntrega", sql.Float, distanciaEntrega)
+        .input("pesoKg", sql.Float, pesoKg)
+        .input("valorKm", sql.Float, valorKm)
+        .input("valorKg", sql.Float, valorKg)
+        .input("valorTotal", sql.Float, valorTotal)
+        .query(`
+            UPDATE entrega
+            SET tipoEntrega = @tipoEntrega,
+                distanciaEntrega = @distanciaEntrega,
+                pesoKg = @pesoKg,
+                valorKm = @valorKm,
+                valorKg = @valorKg,
+                valorTotal = @valorTotal
+            WHERE idPedido = @idPedido
+        `);
+
+    return resultado;
+},
+
+
+    /**
+     * @function deletarEntrega
+     * @async
+     * @description Deleta uma entrega com base no ID informado
+     * @param {string} idEntrega - ID da entrega que será removida
+     */
 
     // Deleta uma entrega
     deletarEntrega: async (idEntrega) => {
